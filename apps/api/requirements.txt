@@ -1,0 +1,22 @@
+fastapi
+uvicorn[standard]
+celery
+redis>=5.0.0
+redis-om>=0.1.0
+hiredis>=2.2.0
+python-multipart
+moviepy>=2.0.0
+openai>=1.12.0
+httpx>=0.27.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.1
+aiofiles>=23.2.1
+tenacity>=8.2.3
+rich>=13.7.0
+typer>=0.9.0
+pillow>=10.2.0
+numpy>=1.26.0
+pyyaml>=6.0.0
+websockets>=12.0
+video-composer @ git+https://github.com/youhanasheriff/video-composer.git@main
