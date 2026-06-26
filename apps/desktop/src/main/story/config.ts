@@ -26,8 +26,8 @@ export function defaultStoryConfig(seed = ""): StoryConfig {
     voiceProvider: "openai-tts",
     llmProviderId: "openai-chat",
     llmModel: "gpt-4o-mini",
-    imageBackend: "imagen",
-    imageModel: "imagen-4.0-fast-generate-001",
+    imageBackend: "gemini",
+    imageModel: "gemini-2.5-flash-image",
     characters: [],
     characterConsistency: defaultCharacterConsistency,
     voiceName: "alloy",
@@ -61,6 +61,8 @@ export function normalizeStoryConfig(value: unknown): StoryConfig {
       ...style,
       aspectRatio: style.aspectRatio ?? fallback.style.aspectRatio,
     },
+    imageBackend: "gemini",
+    imageModel: normalizeGeminiImageModel(input.imageModel),
     characters: normalizeStoryCharacters(input.characters ?? fallback.characters),
     characterConsistency,
     subtitles: {
@@ -159,7 +161,7 @@ function storyConfigYaml(projectId: string, config: StoryConfig): string {
     `  palette: ${JSON.stringify(config.style.palette ?? "")}`,
     "image:",
     `  provider: ${JSON.stringify(config.imageProvider)}`,
-    `  backend: ${JSON.stringify(config.imageBackend ?? "imagen")}`,
+    `  backend: "gemini"`,
     `  model: ${JSON.stringify(config.imageModel ?? "")}`,
     "  local_flux:",
     `    model: "Runpod/FLUX.2-klein-4B-mflux-4bit"`,
@@ -190,6 +192,11 @@ function storyConfigYaml(projectId: string, config: StoryConfig): string {
     "",
   ];
   return lines.join("\n");
+}
+
+function normalizeGeminiImageModel(model: unknown): string {
+  const value = typeof model === "string" ? model.trim() : "";
+  return value.includes("gemini") ? value : "gemini-2.5-flash-image";
 }
 
 function fluxDimensions(aspectRatio: StoryConfig["style"]["aspectRatio"]): [number, number] {

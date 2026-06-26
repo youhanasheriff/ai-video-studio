@@ -157,7 +157,7 @@ export interface StoryConfig {
   llmProviderId: string;
   llmModel?: string;
   imageModel?: string;
-  imageBackend?: "imagen" | "gemini";
+  imageBackend?: "gemini";
   characters: StoryCharacter[];
   characterConsistency: StoryCharacterConsistency;
   voiceName: string;

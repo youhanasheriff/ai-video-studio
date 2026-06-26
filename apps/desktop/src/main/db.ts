@@ -195,7 +195,7 @@ export function initDatabase(): void {
     { id: "openai", kind: "tts", name: "OpenAI", privacy: "api", enabled: false, status: "disabled", hasSecret: false, config: {} },
     { id: "openai-tts", kind: "tts", name: "OpenAI TTS", privacy: "api", enabled: false, status: "disabled", hasSecret: false, baseUrl: "https://api.openai.com/v1", config: {} },
     { id: "openai-chat", kind: "script_llm", name: "OpenAI Chat", privacy: "api", enabled: false, status: "disabled", hasSecret: false, baseUrl: "https://api.openai.com/v1", config: {} },
-    { id: "google", kind: "media", name: "Google Imagen / Gemini", privacy: "api", enabled: false, status: "disabled", hasSecret: false, config: { imageBackend: "imagen", imageModel: "imagen-4.0-fast-generate-001" } },
+    { id: "google", kind: "media", name: "Google Gemini Image", privacy: "api", enabled: false, status: "disabled", hasSecret: false, config: { imageBackend: "gemini", imageModel: "gemini-2.5-flash-image" } },
     { id: "flux2", kind: "media", name: "FLUX.2 / mflux", privacy: "local", enabled: false, status: "missing", config: {} },
     { id: "cosyvoice", kind: "tts", name: "CosyVoice", privacy: "local", enabled: false, status: "missing", config: {} },
     { id: "pexels", kind: "media", name: "Pexels", privacy: "api", enabled: false, status: "disabled", hasSecret: false, config: {} },

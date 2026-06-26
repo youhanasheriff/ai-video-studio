@@ -39,7 +39,6 @@ export async function runImagesStage(projectId: string, config: StoryConfig, onS
       const referenceImagePaths = googleReferencePathsForScene(scene, imageConfig);
       const image = await retry(() => generateGoogleImage(referenceImagePaths.length ? referencePrompt(scene.imagePrompt || scene.title) : scene.imagePrompt || scene.title, {
         aspectRatio: imageConfig.style.aspectRatio,
-        backend: imageConfig.imageBackend,
         model: imageConfig.imageModel,
         referenceImagePaths,
       }));
@@ -53,7 +52,7 @@ export async function runImagesStage(projectId: string, config: StoryConfig, onS
         );
       `);
       upsertStoryScene({ ...sceneToInput(scene), imageAssetId: assetId, imageStatus: "done", imageError: null });
-      manifest.push({ scene_id: scene.sceneId, output_path: outputPath, status: existsSync(outputPath) ? "generated" : "failed", backend: referenceImagePaths.length ? "gemini" : imageConfig.imageBackend ?? "imagen", model: imageConfig.imageModel, character_refs: referenceImagePaths });
+      manifest.push({ scene_id: scene.sceneId, output_path: outputPath, status: existsSync(outputPath) ? "generated" : "failed", backend: "gemini", model: imageConfig.imageModel, character_refs: referenceImagePaths });
       generated += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -116,7 +115,6 @@ export async function regenerateSceneImage(projectId: string, sceneId: number, c
   const referenceImagePaths = googleReferencePathsForScene(scene, imageConfig);
   const image = await retry(() => generateGoogleImage(referenceImagePaths.length ? referencePrompt(prompt) : prompt, {
     aspectRatio: config.style.aspectRatio,
-    backend: imageConfig.imageBackend,
     model: imageConfig.imageModel,
     referenceImagePaths,
   }));
@@ -142,7 +140,6 @@ async function generateGoogleCharacterPortraits(projectId: string, config: Story
     }
     const image = await retry(() => generateGoogleImage(characterPortraitPrompt(character, config), {
       aspectRatio: "1:1",
-      backend: config.imageBackend,
       model: config.imageModel,
     }));
     writeFileSync(outputPath, image);

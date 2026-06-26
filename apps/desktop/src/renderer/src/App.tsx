@@ -143,7 +143,7 @@ function providerSetupCopy(provider: ProviderConfig): { primary: string; seconda
   if (provider.id === "openai") return { primary: "Bring-your-own OpenAI key", secondary: "Use your API key for voice generation now; model features can build on the same provider.", installTarget: "openai" };
   if (provider.id === "openai-tts") return { primary: "OpenAI voice provider", secondary: "Use the shared OpenAI key for narrated short and story videos.", installTarget: "openai" };
   if (provider.id === "openai-chat") return { primary: "OpenAI-compatible writer", secondary: "Use the shared OpenAI key for story writing, scene prompts, and script drafting.", installTarget: "openai" };
-  if (provider.id === "google") return { primary: "Google image provider", secondary: "Use your Google AI key for story scene images through Imagen or Gemini.", installTarget: "google" };
+  if (provider.id === "google") return { primary: "Google Gemini image provider", secondary: "Use your Google AI key for story scene and character reference images through Gemini image generation.", installTarget: "google" };
   if (provider.id === "flux2") return { primary: "Optional local image model", secondary: "Use mflux for local story scene image generation when it is installed.", installTarget: "flux2" };
   if (provider.id === "cosyvoice") return { primary: "Optional local narrator", secondary: "Use a configured CosyVoice checkout for local story narration.", installTarget: "cosyvoice" };
   if (provider.id === "pexels") return { primary: "Bring-your-own stock media key", secondary: "Use Pexels only when you explicitly enable stock search.", installTarget: "pexels" };
