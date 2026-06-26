@@ -56,6 +56,7 @@ export function normalizeStoryCharacter(value: unknown): StoryCharacter | null {
     portraitBackground: stringValue(record.portraitBackground) || stringValue(record.portrait_background) || undefined,
     portraitAssetId: stringValue(record.portraitAssetId) || stringValue(record.portrait_asset_id) || null,
     portraitPath: stringValue(record.portraitPath) || stringValue(record.portrait_path) || null,
+    portraitUrl: stringValue(record.portraitUrl) || stringValue(record.portrait_url) || null,
   };
 }
 
@@ -135,6 +136,7 @@ export function toPipelineCharacter(character: StoryCharacter): Record<string, u
     portrait_pose: character.portraitPose ?? "",
     portrait_background: character.portraitBackground ?? "",
     portrait_path: character.portraitPath ?? "",
+    portrait_url: character.portraitUrl ?? "",
   };
 }
 
@@ -158,6 +160,7 @@ function mergeCharacter(existing: StoryCharacter, next: StoryCharacter): StoryCh
     portraitBackground: existing.portraitBackground || next.portraitBackground,
     portraitAssetId: existing.portraitAssetId || next.portraitAssetId || null,
     portraitPath: existing.portraitPath || next.portraitPath || null,
+    portraitUrl: existing.portraitUrl || next.portraitUrl || null,
   };
 }
 

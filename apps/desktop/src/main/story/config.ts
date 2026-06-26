@@ -1,9 +1,9 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Project, StoryConfig } from "../../shared/types";
 import { defaultCharacterConsistency, normalizeCharacterConsistency, normalizeStoryCharacters } from "../../shared/characters";
 import { execSql, getProject, id, parseJson, querySql, sql, now } from "../db";
-import { projectDir } from "../paths";
+import { localFileUrl, projectDir } from "../paths";
 
 export function defaultStoryConfig(seed = ""): StoryConfig {
   return {
@@ -75,11 +75,11 @@ export function normalizeStoryConfig(value: unknown): StoryConfig {
 export function getStoryConfig(projectId: string): StoryConfig {
   const project = getProject(projectId);
   if (!project) throw new Error("Project not found");
-  return normalizeStoryConfig(project.settings);
+  return hydrateCharacterPortraits(projectId, normalizeStoryConfig(project.settings));
 }
 
 export function saveStoryConfig(projectId: string, config: StoryConfig): StoryConfig {
-  const normalized = normalizeStoryConfig(config);
+  const normalized = hydrateCharacterPortraits(projectId, normalizeStoryConfig(config));
   execSql(`
     UPDATE projects
     SET settings_json = ${sql(JSON.stringify(normalized))}, updated_at = ${sql(now())}
@@ -87,6 +87,28 @@ export function saveStoryConfig(projectId: string, config: StoryConfig): StoryCo
   `);
   writeStoryConfigFiles(projectId, normalized);
   return normalized;
+}
+
+export function storyCharactersDir(projectId: string, config: StoryConfig): string {
+  return config.characterConsistency.charactersDir || join(projectDir(projectId), "characters");
+}
+
+export function hydrateCharacterPortraits(projectId: string, config: StoryConfig): StoryConfig {
+  const charactersDir = storyCharactersDir(projectId, config);
+  const manifestPath = join(charactersDir, "manifest.json");
+  const manifest = existsSync(manifestPath) ? parseJson<{ characters?: Record<string, Record<string, unknown>> }>(readFileSync(manifestPath, "utf8"), {}) : {};
+  const characters = config.characters.map((character) => {
+    const entry = manifest.characters?.[character.key] ?? {};
+    const manifestPathValue = typeof entry.portrait_path === "string" ? entry.portrait_path : "";
+    const candidate = manifestPathValue || character.portraitPath || join(charactersDir, `${character.key}.png`);
+    if (!candidate || !existsSync(candidate) || statSync(candidate).size <= 0) return character;
+    return {
+      ...character,
+      portraitPath: candidate,
+      portraitUrl: localFileUrl(candidate),
+    };
+  });
+  return { ...config, characters };
 }
 
 export function createStoryProject(name: string, config: StoryConfig): Project {
@@ -121,7 +143,7 @@ export function updateProjectScript(projectId: string, script: string): void {
 }
 
 function storyConfigYaml(projectId: string, config: StoryConfig): string {
-  const charactersDir = config.characterConsistency.charactersDir || join(projectDir(projectId), "characters");
+  const charactersDir = storyCharactersDir(projectId, config);
   const localFluxCharactersDir = config.characterConsistency.enabled && config.characterConsistency.mode === "reference_images" ? charactersDir : "";
   const [fluxWidth, fluxHeight] = fluxDimensions(config.style.aspectRatio);
   const lines = [

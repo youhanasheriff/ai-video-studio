@@ -1973,6 +1973,48 @@ h3 {
   gap: 10px;
 }
 
+.character-portrait {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  color: var(--muted);
+  background:
+    linear-gradient(135deg, rgba(49, 214, 197, 0.06), rgba(242, 184, 75, 0.05)),
+    #070b11;
+}
+
+.character-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.character-portrait div {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  padding: 18px;
+  text-align: center;
+}
+
+.character-portrait svg {
+  color: rgba(148, 241, 229, 0.72);
+}
+
+.character-portrait strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.character-portrait small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .character-card-head strong,
 .character-card-head small {
   display: block;

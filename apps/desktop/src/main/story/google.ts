@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { extname } from "node:path";
 import { getProvider, parseJson } from "../db";
 import { readProviderSecret } from "../providers";
 
@@ -5,6 +7,7 @@ export interface GoogleImageOptions {
   aspectRatio: string;
   model?: string;
   backend?: "imagen" | "gemini";
+  referenceImagePaths?: string[];
 }
 
 export async function generateGoogleImage(prompt: string, options: GoogleImageOptions): Promise<Buffer> {
@@ -13,11 +16,22 @@ export async function generateGoogleImage(prompt: string, options: GoogleImageOp
   const key = readProviderSecret("google");
   if (!key) throw new Error("Google image provider has no saved API key. Add one in Providers and Save.");
   const config = parseJson<Record<string, unknown>>(provider.config_json, {});
-  const backend = options.backend || String(config.imageBackend || "imagen") as "imagen" | "gemini";
-  const model = options.model || String(config.imageModel || (backend === "imagen" ? "imagen-4.0-fast-generate-001" : "gemini-2.5-flash-image"));
+  const hasReferences = Boolean(options.referenceImagePaths?.length);
+  const backend = hasReferences ? "gemini" : options.backend || String(config.imageBackend || "imagen") as "imagen" | "gemini";
+  const configuredModel = options.model || String(config.imageModel || "");
+  const model = resolveGoogleImageModel(backend, configuredModel, hasReferences);
   return backend === "gemini"
-    ? generateGeminiImage(prompt, key, model)
+    ? generateGeminiImage(prompt, key, model, options.referenceImagePaths ?? [])
     : generateImagenImage(prompt, key, model, options.aspectRatio);
+}
+
+function resolveGoogleImageModel(backend: "imagen" | "gemini", configuredModel: string, hasReferences: boolean): string {
+  if (backend === "gemini") {
+    if (!hasReferences && configuredModel.includes("gemini")) return configuredModel;
+    if (hasReferences && configuredModel.includes("gemini")) return configuredModel;
+    return "gemini-2.5-flash-image";
+  }
+  return configuredModel || "imagen-4.0-fast-generate-001";
 }
 
 async function generateImagenImage(prompt: string, key: string, model: string, aspectRatio: string): Promise<Buffer> {
@@ -36,9 +50,18 @@ async function generateImagenImage(prompt: string, key: string, model: string, a
   return Buffer.from(b64, "base64");
 }
 
-async function generateGeminiImage(prompt: string, key: string, model: string): Promise<Buffer> {
+async function generateGeminiImage(prompt: string, key: string, model: string, referenceImagePaths: string[]): Promise<Buffer> {
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+    { text: prompt },
+    ...referenceImagePaths.map((path) => ({
+      inlineData: {
+        mimeType: mimeTypeForPath(path),
+        data: readFileSync(path).toString("base64"),
+      },
+    })),
+  ];
   const response = await postGoogleJson(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, key, {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts }],
     generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
   });
   const candidates = response.candidates as Array<{ content?: { parts?: Array<{ inlineData?: { data?: string }; inline_data?: { data?: string } }> } }> | undefined;
@@ -49,6 +72,13 @@ async function generateGeminiImage(prompt: string, key: string, model: string): 
     }
   }
   throw new Error(`No inline image data in Gemini response: ${JSON.stringify(response).slice(0, 500)}`);
+}
+
+function mimeTypeForPath(path: string): string {
+  const ext = extname(path).toLowerCase();
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".webp") return "image/webp";
+  return "image/png";
 }
 
 async function postGoogleJson(url: string, key: string, payload: unknown): Promise<Record<string, unknown>> {

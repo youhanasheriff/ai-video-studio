@@ -106,6 +106,7 @@ export interface StoryCharacter {
   portraitBackground?: string;
   portraitAssetId?: string | null;
   portraitPath?: string | null;
+  portraitUrl?: string | null;
 }
 
 export interface StoryCharacterConsistency {
@@ -287,6 +288,7 @@ export interface StudioApi {
     updateScript: (projectId: string, script: string) => Promise<StoryScene[]>;
     stages: (projectId: string) => Promise<StoryStageState[]>;
     scenes: (projectId: string) => Promise<StoryScene[]>;
+    generateCharacterPortraits: (projectId: string, config: StoryConfig, force?: boolean) => Promise<StoryConfig>;
     regenerateImage: (projectId: string, sceneId: number, promptOverride?: string) => Promise<StoryScene>;
     updateScene: (projectId: string, sceneId: number, patch: StoryScenePatch) => Promise<StoryScene>;
   };

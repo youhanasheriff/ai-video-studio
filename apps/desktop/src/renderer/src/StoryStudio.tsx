@@ -112,6 +112,7 @@ export function StoryStudio({
   const assembleDone = stageStatus("assemble") === "done";
   const finalizeDone = stageStatus("finalize") === "done";
   const characterUsage = useMemo(() => characterUsageByKey(scenes, config.characters), [scenes, config.characters]);
+  const hasCharacterPortraits = config.characters.some((character) => Boolean(character.portraitUrl));
 
   useEffect(() => {
     setScript(project.script);
@@ -241,6 +242,18 @@ export function StoryStudio({
       ...current,
       characters: mergeStoryCharacters(current.characters, inferCharactersFromScenes(scenes)),
     }));
+  }
+
+  async function generatePortraits(force = false) {
+    setBusy(force ? "characters-force" : "characters");
+    try {
+      const saved = await window.studio.story.generateCharacterPortraits(project.id, config, force);
+      setConfig(saved);
+      onMessage(force ? "Character base images regenerated." : "Character base images generated.");
+      await loadStory(true);
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function regenerateImage(sceneId: number, prompt: string) {
@@ -430,6 +443,16 @@ export function StoryStudio({
                 <UsersRound size={15} />
                 Extract from scenes
               </button>
+              <button className="button primary" onClick={() => generatePortraits(false)} disabled={Boolean(busy) || !config.characters.length}>
+                {busy === "characters" ? <Loader2 className="spin" size={15} /> : <Image size={15} />}
+                Generate base images
+              </button>
+              {hasCharacterPortraits && (
+                <button className="button ghost" onClick={() => generatePortraits(true)} disabled={Boolean(busy) || !config.characters.length}>
+                  {busy === "characters-force" ? <Loader2 className="spin" size={15} /> : <RefreshCcw size={15} />}
+                  Regenerate base images
+                </button>
+              )}
               <button className="button primary" onClick={saveConfig} disabled={busy === "config"}>
                 {busy === "config" ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
                 Save characters
@@ -447,6 +470,17 @@ export function StoryStudio({
                     <button className="icon-button danger" onClick={() => removeCharacter(character.key)} title="Remove character">
                       <Trash2 size={14} />
                     </button>
+                  </div>
+                  <div className="character-portrait">
+                    {character.portraitUrl ? (
+                      <img src={character.portraitUrl} alt={`${character.name} base reference`} />
+                    ) : (
+                      <div>
+                        <Image size={28} />
+                        <strong>No base image</strong>
+                        <small>Reference image pending</small>
+                      </div>
+                    )}
                   </div>
                   <div className="character-fields">
                     <TextField label="Name" value={character.name} onChange={(value) => updateCharacter(index, { name: value })} />

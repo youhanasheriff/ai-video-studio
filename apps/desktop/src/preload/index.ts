@@ -47,6 +47,7 @@ const api: StudioApi = {
     updateScript: (projectId: string, script: string) => ipcRenderer.invoke("story:updateScript", projectId, script),
     stages: (projectId: string) => ipcRenderer.invoke("story:stages", projectId),
     scenes: (projectId: string) => ipcRenderer.invoke("story:scenes", projectId),
+    generateCharacterPortraits: (projectId: string, config: StoryConfig, force?: boolean) => ipcRenderer.invoke("story:generateCharacterPortraits", projectId, config, force),
     regenerateImage: (projectId: string, sceneId: number, promptOverride?: string) => ipcRenderer.invoke("story:regenerateImage", projectId, sceneId, promptOverride),
     updateScene: (projectId: string, sceneId: number, patch: StoryScenePatch) =>
       ipcRenderer.invoke("story:updateScene", projectId, sceneId, patch),

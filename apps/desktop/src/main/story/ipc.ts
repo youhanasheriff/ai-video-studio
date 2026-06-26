@@ -3,7 +3,7 @@ import type { StoryConfig, StoryStage } from "../../shared/types";
 import { createStoryProject, getStoryConfig, saveStoryConfig } from "./config";
 import { createStoryJob } from "./runner";
 import { firstIncompleteStage, listStoryScenes, listStoryStages, markStagesStaleAfter, updateStoryScene } from "./scenes";
-import { regenerateSceneImage } from "./stages/images";
+import { generateCharacterPortraits, regenerateSceneImage } from "./stages/images";
 import { updateStoryScript } from "./script";
 
 export function registerStoryIpc(): void {
@@ -37,6 +37,10 @@ export function registerStoryIpc(): void {
   ipcMain.handle("story:stages", async (_event, projectId: string) => listStoryStages(projectId));
 
   ipcMain.handle("story:scenes", async (_event, projectId: string) => listStoryScenes(projectId));
+
+  ipcMain.handle("story:generateCharacterPortraits", async (_event, projectId: string, config: StoryConfig, force?: boolean) => {
+    return generateCharacterPortraits(projectId, config, Boolean(force));
+  });
 
   ipcMain.handle("story:regenerateImage", async (_event, projectId: string, sceneId: number, promptOverride?: string) => {
     return regenerateSceneImage(projectId, sceneId, getStoryConfig(projectId), promptOverride);
