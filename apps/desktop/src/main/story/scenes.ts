@@ -1,8 +1,10 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { StoryScene, StorySceneStatus, StoryStage, StoryStageState, StoryStageStatus } from "../../shared/types";
+import type { StoryScene, StoryScenePatch, StorySceneStatus, StoryStage, StoryStageState, StoryStageStatus } from "../../shared/types";
+import { mergeStoryCharacters, normalizeSceneCharacterKeys, toPipelineCharacter } from "../../shared/characters";
 import { execSql, now, parseJson, querySql, sql } from "../db";
 import { projectDir } from "../paths";
+import { getStoryConfig } from "./config";
 
 export interface StorySceneRow {
   project_id: string;
@@ -46,7 +48,7 @@ export function mapStoryScene(row: StorySceneRow): StoryScene {
     narrationText: row.narration_text,
     imagePrompt: row.image_prompt,
     negativePrompt: row.negative_prompt,
-    characters: parseJson<unknown[]>(row.characters_json, []),
+    characters: parseJson<Array<string | Record<string, unknown>>>(row.characters_json, []),
     continuityNotes: row.continuity_notes,
     estimatedDurationSeconds: row.estimated_duration_seconds,
     imageAssetId: row.image_asset_id,
@@ -95,7 +97,7 @@ export function upsertStoryScene(input: {
   narrationText?: string;
   imagePrompt?: string;
   negativePrompt?: string;
-  characters?: unknown[];
+  characters?: StoryScene["characters"];
   continuityNotes?: string;
   estimatedDurationSeconds?: number | null;
   imageAssetId?: string | null;
@@ -141,7 +143,7 @@ export function upsertStoryScene(input: {
   return getStoryScene(input.projectId, input.sceneId);
 }
 
-export function updateStoryScene(projectId: string, sceneId: number, patch: Partial<Pick<StoryScene, "title" | "narrationText" | "imagePrompt" | "negativePrompt" | "continuityNotes">>): StoryScene {
+export function updateStoryScene(projectId: string, sceneId: number, patch: StoryScenePatch): StoryScene {
   const existing = getStoryScene(projectId, sceneId);
   execSql(`
     UPDATE story_scenes SET
@@ -149,6 +151,7 @@ export function updateStoryScene(projectId: string, sceneId: number, patch: Part
       narration_text = ${sql(patch.narrationText ?? existing.narrationText)},
       image_prompt = ${sql(patch.imagePrompt ?? existing.imagePrompt)},
       negative_prompt = ${sql(patch.negativePrompt ?? existing.negativePrompt)},
+      characters_json = ${sql(JSON.stringify(patch.characters ?? existing.characters))},
       continuity_notes = ${sql(patch.continuityNotes ?? existing.continuityNotes)},
       updated_at = ${sql(now())}
     WHERE project_id = ${sql(projectId)} AND scene_id = ${sql(sceneId)};
@@ -210,7 +213,19 @@ export function markStagesStaleAfter(projectId: string, stage: StoryStage): void
 
 export function writeScenesJson(projectId: string): void {
   const scenes = listStoryScenes(projectId);
+  const config = getStoryConfig(projectId);
+  const characters = mergeStoryCharacters(config.characters, scenes.flatMap((scene) => scene.characters));
   const payload = {
+    style_lock: config.style.styleLock ?? "",
+    palette: config.style.palette ?? "",
+    medium: config.style.visualStyle,
+    aspect_ratio: config.style.aspectRatio,
+    character_consistency: {
+      enabled: config.characterConsistency.enabled,
+      mode: config.characterConsistency.mode,
+      max_refs_per_scene: config.characterConsistency.maxRefsPerScene,
+    },
+    characters: characters.map(toPipelineCharacter),
     scenes: scenes.map((scene) => ({
       scene_id: scene.sceneId,
       title: scene.title,
@@ -218,6 +233,7 @@ export function writeScenesJson(projectId: string): void {
       image_prompt: scene.imagePrompt,
       negative_prompt: scene.negativePrompt,
       characters: scene.characters,
+      characters_in_scene: normalizeSceneCharacterKeys(scene.characters, characters),
       continuity_notes: scene.continuityNotes,
       estimated_duration_seconds: scene.estimatedDurationSeconds,
     })),

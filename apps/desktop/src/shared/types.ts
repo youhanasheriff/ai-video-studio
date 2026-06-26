@@ -17,6 +17,7 @@ export type ProviderStatus = "connected" | "missing" | "error" | "disabled";
 export type StoryStage = "writer" | "prompts" | "images" | "tts" | "assemble" | "subtitles" | "finalize";
 export type StoryStageStatus = "pending" | "running" | "done" | "failed" | "stale";
 export type StorySceneStatus = "pending" | "generating" | "done" | "failed";
+export type CharacterConsistencyMode = "prompt_tokens" | "reference_images";
 
 export interface Project {
   id: string;
@@ -96,6 +97,24 @@ export interface StockVideo {
   files: StockVideoFile[];
 }
 
+export interface StoryCharacter {
+  key: string;
+  name: string;
+  visualToken: string;
+  wardrobe: string;
+  portraitPose?: string;
+  portraitBackground?: string;
+  portraitAssetId?: string | null;
+  portraitPath?: string | null;
+}
+
+export interface StoryCharacterConsistency {
+  enabled: boolean;
+  mode: CharacterConsistencyMode;
+  maxRefsPerScene: number;
+  charactersDir?: string;
+}
+
 export interface ShortGenerationRequest {
   kind?: "short";
   projectId: string;
@@ -138,6 +157,8 @@ export interface StoryConfig {
   llmModel?: string;
   imageModel?: string;
   imageBackend?: "imagen" | "gemini";
+  characters: StoryCharacter[];
+  characterConsistency: StoryCharacterConsistency;
   voiceName: string;
   voiceSpeed: number;
   subtitles: {
@@ -164,7 +185,7 @@ export interface StoryScene {
   narrationText: string;
   imagePrompt: string;
   negativePrompt: string;
-  characters: unknown[];
+  characters: Array<string | Partial<StoryCharacter>>;
   continuityNotes: string;
   estimatedDurationSeconds: number | null;
   imageAssetId: string | null;
@@ -188,6 +209,8 @@ export interface StoryStageState {
   error: string | null;
   updatedAt: string;
 }
+
+export type StoryScenePatch = Partial<Pick<StoryScene, "title" | "narrationText" | "imagePrompt" | "negativePrompt" | "characters" | "continuityNotes">>;
 
 export interface GenerationJob {
   id: string;
@@ -265,7 +288,7 @@ export interface StudioApi {
     stages: (projectId: string) => Promise<StoryStageState[]>;
     scenes: (projectId: string) => Promise<StoryScene[]>;
     regenerateImage: (projectId: string, sceneId: number, promptOverride?: string) => Promise<StoryScene>;
-    updateScene: (projectId: string, sceneId: number, patch: Partial<Pick<StoryScene, "title" | "narrationText" | "imagePrompt" | "negativePrompt" | "continuityNotes">>) => Promise<StoryScene>;
+    updateScene: (projectId: string, sceneId: number, patch: StoryScenePatch) => Promise<StoryScene>;
   };
   exports: {
     choosePath: (defaultName: string) => Promise<string | null>;

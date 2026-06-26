@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Clapperboard, Download, Image, Loader2, Mic2, Play, RefreshCcw, Save, ScrollText, Sparkles, Trash2 } from "lucide-react";
-import type { Asset, GenerationJob, Project, ProviderConfig, StoryConfig, StoryScene, StoryStage, StoryStageState } from "../../shared/types";
+import { BookOpen, Clapperboard, Download, Image, Loader2, Mic2, Play, Plus, RefreshCcw, Save, ScrollText, Sparkles, Trash2, UsersRound } from "lucide-react";
+import type { Asset, GenerationJob, Project, ProviderConfig, StoryCharacter, StoryConfig, StoryScene, StoryScenePatch, StoryStage, StoryStageState } from "../../shared/types";
+import { characterKey, characterUsageByKey, defaultCharacterConsistency, inferCharactersFromScenes, mergeStoryCharacters } from "../../shared/characters";
 import { SceneGrid } from "./components/SceneGrid";
 import { StoryStageTracker } from "./components/StoryStageTracker";
 
-type StoryStep = "seed" | "script" | "scenes" | "voice" | "render";
+type StoryStep = "seed" | "script" | "characters" | "scenes" | "voice" | "render";
 
 const storySteps: Array<{ id: StoryStep; label: string; icon: typeof Sparkles }> = [
   { id: "seed", label: "Seed", icon: Sparkles },
   { id: "script", label: "Script", icon: ScrollText },
+  { id: "characters", label: "Characters", icon: UsersRound },
   { id: "scenes", label: "Scenes", icon: Image },
   { id: "voice", label: "Voice", icon: Mic2 },
   { id: "render", label: "Render", icon: Download },
@@ -57,6 +59,8 @@ export function createDefaultStoryConfig(seed = ""): StoryConfig {
     llmModel: "gpt-4o-mini",
     imageBackend: "imagen",
     imageModel: "imagen-4.0-fast-generate-001",
+    characters: [],
+    characterConsistency: defaultCharacterConsistency,
     voiceName: "alloy",
     voiceSpeed: 1,
     subtitles: {
@@ -107,6 +111,7 @@ export function StoryStudio({
   const stageStatus = (stage: StoryStage) => stages.find((item) => item.stage === stage)?.status;
   const assembleDone = stageStatus("assemble") === "done";
   const finalizeDone = stageStatus("finalize") === "done";
+  const characterUsage = useMemo(() => characterUsageByKey(scenes, config.characters), [scenes, config.characters]);
 
   useEffect(() => {
     setScript(project.script);
@@ -192,10 +197,50 @@ export function StoryStudio({
     }
   }
 
-  async function saveScene(sceneId: number, patch: Partial<Pick<StoryScene, "title" | "imagePrompt" | "negativePrompt" | "continuityNotes">>) {
+  async function saveScene(sceneId: number, patch: StoryScenePatch) {
     const updated = await window.studio.story.updateScene(project.id, sceneId, patch);
     setScenes((items) => items.map((item) => item.sceneId === sceneId ? updated : item));
     onMessage(`Scene ${String(sceneId).padStart(4, "0")} saved.`);
+  }
+
+  function addCharacter() {
+    const nextNumber = config.characters.length + 1;
+    const next: StoryCharacter = {
+      key: `character_${nextNumber}`,
+      name: `Character ${nextNumber}`,
+      visualToken: `Character ${nextNumber}`,
+      wardrobe: "",
+      portraitPose: "standing in a neutral pose, three-quarter view, full body visible",
+      portraitBackground: "soft neutral studio background with gentle lighting",
+    };
+    setConfig((current) => ({ ...current, characters: [...current.characters, next] }));
+  }
+
+  function updateCharacter(index: number, patch: Partial<StoryCharacter>) {
+    setConfig((current) => ({
+      ...current,
+      characters: current.characters.map((character, itemIndex) => {
+        if (itemIndex !== index) return character;
+        const merged = { ...character, ...patch };
+        if (patch.name && (!patch.key || patch.key === character.key)) merged.key = characterKey(patch.name) || character.key;
+        if (patch.key) merged.key = characterKey(patch.key) || character.key;
+        return merged;
+      }),
+    }));
+  }
+
+  function removeCharacter(key: string) {
+    setConfig((current) => ({
+      ...current,
+      characters: current.characters.filter((character) => character.key !== key),
+    }));
+  }
+
+  function extractCharacters() {
+    setConfig((current) => ({
+      ...current,
+      characters: mergeStoryCharacters(current.characters, inferCharactersFromScenes(scenes)),
+    }));
   }
 
   async function regenerateImage(sceneId: number, prompt: string) {
@@ -330,6 +375,112 @@ export function StoryStudio({
           </StoryPanel>
         )}
 
+        {step === "characters" && (
+          <StoryPanel title="Characters" subtitle="Maintain canonical identities, wardrobe, and reference portrait settings.">
+            <div className="character-control-grid">
+              <label className="switch-line">
+                <span>
+                  <strong>Character consistency</strong>
+                  <small>{config.characterConsistency.enabled ? "Enabled" : "Disabled"}</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={config.characterConsistency.enabled}
+                  onChange={(event) => setConfig({
+                    ...config,
+                    characterConsistency: { ...config.characterConsistency, enabled: event.target.checked },
+                  })}
+                />
+              </label>
+              <SelectField
+                label="Mode"
+                value={config.characterConsistency.mode}
+                options={[
+                  { value: "prompt_tokens", label: "Prompt tokens" },
+                  { value: "reference_images", label: "Reference images" },
+                ]}
+                onChange={(value) => setConfig({
+                  ...config,
+                  characterConsistency: { ...config.characterConsistency, mode: value as StoryConfig["characterConsistency"]["mode"] },
+                })}
+              />
+              <NumberField
+                label="Max refs per scene"
+                value={config.characterConsistency.maxRefsPerScene}
+                onChange={(value) => setConfig({
+                  ...config,
+                  characterConsistency: { ...config.characterConsistency, maxRefsPerScene: value },
+                })}
+              />
+            </div>
+            <TextField
+              label="Characters directory"
+              value={config.characterConsistency.charactersDir ?? ""}
+              onChange={(value) => setConfig({
+                ...config,
+                characterConsistency: { ...config.characterConsistency, charactersDir: value || undefined },
+              })}
+            />
+            <div className="story-actions">
+              <button className="button ghost" onClick={addCharacter}>
+                <Plus size={15} />
+                Add character
+              </button>
+              <button className="button ghost" onClick={extractCharacters} disabled={!scenes.length}>
+                <UsersRound size={15} />
+                Extract from scenes
+              </button>
+              <button className="button primary" onClick={saveConfig} disabled={busy === "config"}>
+                {busy === "config" ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
+                Save characters
+              </button>
+            </div>
+            <div className="character-grid">
+              {config.characters.map((character, index) => (
+                <article className="character-card" key={`${character.key}-${index}`}>
+                  <div className="character-card-head">
+                    <span className="character-avatar"><UsersRound size={16} /></span>
+                    <div>
+                      <strong>{character.name || character.key}</strong>
+                      <small>{character.key}</small>
+                    </div>
+                    <button className="icon-button danger" onClick={() => removeCharacter(character.key)} title="Remove character">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <div className="character-fields">
+                    <TextField label="Name" value={character.name} onChange={(value) => updateCharacter(index, { name: value })} />
+                    <TextField label="Key" value={character.key} onChange={(value) => updateCharacter(index, { key: value })} />
+                    <TextField label="Visual token" value={character.visualToken} onChange={(value) => updateCharacter(index, { visualToken: value })} />
+                    <TextField label="Wardrobe" value={character.wardrobe} onChange={(value) => updateCharacter(index, { wardrobe: value })} />
+                  </div>
+                  <label className="form-field">
+                    <span>Portrait pose</span>
+                    <textarea className="mini-textarea" value={character.portraitPose ?? ""} onChange={(event) => updateCharacter(index, { portraitPose: event.target.value })} />
+                  </label>
+                  <label className="form-field">
+                    <span>Portrait background</span>
+                    <textarea className="mini-textarea" value={character.portraitBackground ?? ""} onChange={(event) => updateCharacter(index, { portraitBackground: event.target.value })} />
+                  </label>
+                  <div className="character-usage">
+                    {(characterUsage.get(character.key) ?? []).slice(0, 10).map((sceneId) => (
+                      <span key={sceneId}>{String(sceneId).padStart(4, "0")}</span>
+                    ))}
+                    {!characterUsage.has(character.key) && <em>Unused</em>}
+                  </div>
+                </article>
+              ))}
+              {config.characters.length === 0 && (
+                <div className="scene-empty">
+                  <UsersRound size={22} />
+                  <strong>No characters yet</strong>
+                  <span>Character roster is empty.</span>
+                </div>
+              )}
+            </div>
+          </StoryPanel>
+        )}
+
         {step === "scenes" && (
           <StoryPanel title="Scenes" subtitle="Review image prompts and regenerate individual scene images.">
             <div className="story-actions">
@@ -342,7 +493,7 @@ export function StoryStudio({
                 Generate images
               </button>
             </div>
-            <SceneGrid scenes={scenes} assets={assets} busySceneId={busySceneId} onSaveScene={saveScene} onRegenerateImage={regenerateImage} />
+            <SceneGrid scenes={scenes} assets={assets} characters={config.characters} busySceneId={busySceneId} onSaveScene={saveScene} onRegenerateImage={regenerateImage} />
           </StoryPanel>
         )}
 

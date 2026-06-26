@@ -95,6 +95,18 @@ export async function regenerateSceneImage(projectId: string, sceneId: number, c
 async function runLocalFluxImagesStage(projectId: string, config: StoryConfig, onScene?: (done: number, total: number) => void, jobId = `images_${projectId}`): Promise<{ generated: number; failed: number }> {
   const scenes = listStoryScenes(projectId);
   const seen = new Set<number>();
+  if (config.characterConsistency.enabled && config.characterConsistency.mode === "reference_images" && config.characters.length) {
+    await spawnPythonStage({
+      jobId: `${jobId}_characters`,
+      projectId,
+      scriptName: "generate_character_portraits.py",
+      args: ["--project", projectDir(projectId)],
+      config,
+      onLine: (line, stream) => {
+        if (jobId) logJob(jobId, stream === "stderr" ? "warn" : "info", line);
+      },
+    });
+  }
   await spawnPythonStage({
     jobId,
     projectId,

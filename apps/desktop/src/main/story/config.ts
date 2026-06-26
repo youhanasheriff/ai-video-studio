@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Project, StoryConfig } from "../../shared/types";
+import { defaultCharacterConsistency, normalizeCharacterConsistency, normalizeStoryCharacters } from "../../shared/characters";
 import { execSql, getProject, id, parseJson, querySql, sql, now } from "../db";
 import { projectDir } from "../paths";
 
@@ -27,6 +28,8 @@ export function defaultStoryConfig(seed = ""): StoryConfig {
     llmModel: "gpt-4o-mini",
     imageBackend: "imagen",
     imageModel: "imagen-4.0-fast-generate-001",
+    characters: [],
+    characterConsistency: defaultCharacterConsistency,
     voiceName: "alloy",
     voiceSpeed: 1,
     subtitles: {
@@ -43,6 +46,7 @@ export function normalizeStoryConfig(value: unknown): StoryConfig {
   const target = input.target ?? fallback.target;
   const style = input.style ?? fallback.style;
   const subtitles = input.subtitles ?? fallback.subtitles;
+  const characterConsistency = normalizeCharacterConsistency(input.characterConsistency ?? fallback.characterConsistency);
   return {
     ...fallback,
     ...input,
@@ -57,6 +61,8 @@ export function normalizeStoryConfig(value: unknown): StoryConfig {
       ...style,
       aspectRatio: style.aspectRatio ?? fallback.style.aspectRatio,
     },
+    characters: normalizeStoryCharacters(input.characters ?? fallback.characters),
+    characterConsistency,
     subtitles: {
       ...fallback.subtitles,
       ...subtitles,
@@ -104,7 +110,7 @@ export function writeStoryConfigFiles(projectId: string, config: StoryConfig): v
   const dir = projectDir(projectId);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "seed.txt"), config.seed || "", "utf8");
-  writeFileSync(join(dir, "config.yaml"), storyConfigYaml(config), "utf8");
+  writeFileSync(join(dir, "config.yaml"), storyConfigYaml(projectId, config), "utf8");
 }
 
 export function updateProjectScript(projectId: string, script: string): void {
@@ -114,7 +120,10 @@ export function updateProjectScript(projectId: string, script: string): void {
   `);
 }
 
-function storyConfigYaml(config: StoryConfig): string {
+function storyConfigYaml(projectId: string, config: StoryConfig): string {
+  const charactersDir = config.characterConsistency.charactersDir || join(projectDir(projectId), "characters");
+  const localFluxCharactersDir = config.characterConsistency.enabled && config.characterConsistency.mode === "reference_images" ? charactersDir : "";
+  const [fluxWidth, fluxHeight] = fluxDimensions(config.style.aspectRatio);
   const lines = [
     "target:",
     `  script_words: ${config.target.scriptWords}`,
@@ -130,6 +139,21 @@ function storyConfigYaml(config: StoryConfig): string {
     `  provider: ${JSON.stringify(config.imageProvider)}`,
     `  backend: ${JSON.stringify(config.imageBackend ?? "imagen")}`,
     `  model: ${JSON.stringify(config.imageModel ?? "")}`,
+    "  local_flux:",
+    `    model: "Runpod/FLUX.2-klein-4B-mflux-4bit"`,
+    "    low_ram: true",
+    "    steps: 4",
+    "    guidance: 1.0",
+    "    seed: 42",
+    `    width: ${fluxWidth}`,
+    `    height: ${fluxHeight}`,
+    `    style_suffix: ${JSON.stringify([config.style.visualStyle, config.style.palette, config.style.styleLock].filter(Boolean).join(", "))}`,
+    `    series_characters_dir: ${JSON.stringify(localFluxCharactersDir)}`,
+    `    max_refs_per_scene: ${config.characterConsistency.maxRefsPerScene}`,
+    "character_consistency:",
+    `  enabled: ${config.characterConsistency.enabled}`,
+    `  mode: ${JSON.stringify(config.characterConsistency.mode)}`,
+    `  characters_dir: ${JSON.stringify(charactersDir)}`,
     "tts:",
     `  provider: ${JSON.stringify(config.voiceProvider)}`,
     `  voice_name: ${JSON.stringify(config.voiceName)}`,
@@ -144,6 +168,13 @@ function storyConfigYaml(config: StoryConfig): string {
     "",
   ];
   return lines.join("\n");
+}
+
+function fluxDimensions(aspectRatio: StoryConfig["style"]["aspectRatio"]): [number, number] {
+  if (aspectRatio === "9:16") return [768, 1344];
+  if (aspectRatio === "1:1") return [1024, 1024];
+  if (aspectRatio === "4:5") return [896, 1120];
+  return [1344, 768];
 }
 
 export function listStoryProjects(): Project[] {

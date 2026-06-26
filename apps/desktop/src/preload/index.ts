@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { CreateProjectInput, GenerationRequest, Project, ProviderSaveInput, StockVideo, StoryConfig, StoryScene, StoryStage } from "../shared/types";
+import type { CreateProjectInput, GenerationRequest, Project, ProviderSaveInput, StockVideo, StoryConfig, StoryScenePatch, StoryStage } from "../shared/types";
 import type { StudioApi } from "../shared/types";
 
 const api: StudioApi = {
@@ -48,7 +48,7 @@ const api: StudioApi = {
     stages: (projectId: string) => ipcRenderer.invoke("story:stages", projectId),
     scenes: (projectId: string) => ipcRenderer.invoke("story:scenes", projectId),
     regenerateImage: (projectId: string, sceneId: number, promptOverride?: string) => ipcRenderer.invoke("story:regenerateImage", projectId, sceneId, promptOverride),
-    updateScene: (projectId: string, sceneId: number, patch: Partial<Pick<StoryScene, "title" | "narrationText" | "imagePrompt" | "negativePrompt" | "continuityNotes">>) =>
+    updateScene: (projectId: string, sceneId: number, patch: StoryScenePatch) =>
       ipcRenderer.invoke("story:updateScene", projectId, sceneId, patch),
   },
   exports: {

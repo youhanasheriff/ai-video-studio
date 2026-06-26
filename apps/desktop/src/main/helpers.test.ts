@@ -3,6 +3,7 @@ import { buildAssSubtitles, groupCaptionLines, normalizeAssColor } from "./capti
 import { clamp, escapeDrawText, estimateDuration, ffmpegColor } from "./ffmpeg";
 import { installPlan, normalizeOpenAiVoice, resolveOpenAiCompatibleTtsFormat, resolveOpenAiCompatibleTtsInputLimit, resolveOpenAiCompatibleTtsVoice } from "./providers";
 import { parseJson, shouldApplyLegacyOpenAiProviderState, sql } from "./db";
+import { characterKey, mergeStoryCharacters, normalizeSceneCharacterKeys, toPipelineCharacter } from "../shared/characters";
 
 describe("db helpers", () => {
   it("escapes SQL values", () => {
@@ -52,6 +53,20 @@ describe("provider helpers", () => {
   it("has install plans", () => {
     expect(installPlan("flux2").command).toContain("mflux");
     expect(installPlan("openai-chat").guideUrl).toContain("platform.openai.com");
+  });
+});
+
+describe("story character helpers", () => {
+  it("normalizes character bible entries and scene keys for the pipeline", () => {
+    const characters = mergeStoryCharacters([
+      { name: "Rimuru Tempest", visual_token: "small translucent blue slime Rimuru", wardrobe: "glossy blue body" },
+      { key: "rimuru_tempest", name: "Rimuru", visualToken: "Rimuru slime" },
+    ]);
+
+    expect(characterKey("Rimuru Tempest!")).toBe("rimuru_tempest");
+    expect(characters).toHaveLength(1);
+    expect(toPipelineCharacter(characters[0]).visual_token).toBe("small translucent blue slime Rimuru");
+    expect(normalizeSceneCharacterKeys(["Rimuru"], characters)).toEqual(["rimuru_tempest"]);
   });
 });
 
