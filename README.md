@@ -54,8 +54,31 @@ Access the services:
 
 ### Development Workflow
 
+#### 0. Desktop App
+The local-first desktop app runs without Redis, Celery, or API keys.
+
+```bash
+cd apps/desktop
+npm install --legacy-peer-deps
+npm run dev
+```
+
+From the repository root:
+
+```bash
+npm run dev:desktop
+```
+
+Desktop v1 stores projects in SQLite under the app data folder, imports local clips into managed project folders, checks local dependencies such as SQLite/FFmpeg/Ollama/Piper/Whisper, and can render a local MP4 preview with FFmpeg.
+
 #### 1. Backend Development
-To run the backend locally without Docker:
+To run the backend locally without Docker in mock mode, no Redis or API keys are required:
+```bash
+cd apps/api
+USE_IN_MEMORY_DB=1 DEV_MOCK_GENERATION=1 uvicorn main:app --reload
+```
+
+For the full video generation pipeline:
 ```bash
 cd apps/api
 python -m venv .venv
@@ -63,7 +86,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
-*Note: You also need a local Redis running on localhost:6379.*
+*Full generation requires Redis on localhost:6379 plus the OpenAI and stock-media API keys.*
 
 You can also use the helper script from the repository root:
 
@@ -107,6 +130,10 @@ ai-video-studio/
     - `PEXELS_API_KEY`: Required when `STOCK_PROVIDER=pexels`.
     - `PIXABAY_API_KEY`: Required when `STOCK_PROVIDER=pixabay`.
     - `STOCK_PROVIDER`: `pexels` or `pixabay` (defaults to `pexels` in `video-composer`).
+    - `USE_IN_MEMORY_DB`: Set to `1` to run without Redis.
+    - `DEV_MOCK_GENERATION`: `auto`, `1`, or `0`; mock mode avoids Celery/API-key generation.
+    - `MOCK_VIDEO_PATH`: Optional local `.mp4` returned by mock generation.
+    - `REQUIRE_REDIS`: Set to `1` to fail startup when Redis is unavailable.
 
 ## Developing the CLI Tool
 

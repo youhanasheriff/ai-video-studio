@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Type, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Palette, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React from "react";
+import { AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Palette, Check } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SUBTITLE_PRESETS, type SubtitleStyle } from "@/lib/types";
@@ -32,8 +31,6 @@ export function SubtitleEditor({
   animation,
   onAnimationChange,
 }: SubtitleEditorProps) {
-  const [showColorPicker, setShowColorPicker] = useState(false);
-
   const positions = [
     { id: "top", icon: AlignVerticalJustifyStart, label: "Top" },
     { id: "center", icon: AlignVerticalJustifyCenter, label: "Center" },

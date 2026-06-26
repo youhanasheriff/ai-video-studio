@@ -1,6 +1,6 @@
 # AI Video Studio API
 
-FastAPI backend for the AI Video Generation Studio, using Redis as both database and cache.
+FastAPI backend for the AI Video Generation Studio. The full generation pipeline uses Redis, Celery, and external AI/stock-media APIs. For local UI/API development, it can also run with in-memory storage and mock generation.
 
 ## Architecture
 
@@ -57,9 +57,24 @@ OPENAI_API_KEY=your_key                  # Required for TTS, transcription, and 
 PEXELS_API_KEY=your_key                  # Required when STOCK_PROVIDER=pexels
 PIXABAY_API_KEY=your_key                 # Required when STOCK_PROVIDER=pixabay
 STOCK_PROVIDER=pexels                    # pexels or pixabay
+USE_IN_MEMORY_DB=0                       # Set to 1 to avoid Redis locally
+DEV_MOCK_GENERATION=auto                 # auto, 1, or 0
+MOCK_VIDEO_PATH=                         # Optional sample mp4 for mock generation
+REQUIRE_REDIS=0                          # Set to 1 to fail startup when Redis is down
 ```
 
 ## Running Locally
+
+### Mock mode: no Redis or API keys
+
+```bash
+cd apps/api
+USE_IN_MEMORY_DB=1 DEV_MOCK_GENERATION=1 uvicorn main:app --reload
+```
+
+This mode stores projects/tasks in memory and simulates `/generate` progress. If `MOCK_VIDEO_PATH` points to a local `.mp4`, the mock task returns it as the generated video. In this workspace, the API also checks the sibling `video-composer/test_footage` folders for a sample clip.
+
+### Full generation mode
 
 ```bash
 # Install dependencies

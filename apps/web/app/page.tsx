@@ -12,7 +12,6 @@ import {
   Plus,
   Sparkles,
   Loader2,
-  ChevronRight,
   Clock,
   Zap,
   PlayCircle,
@@ -29,8 +28,6 @@ import { SUBTITLE_PRESETS, type SubtitleStyle } from "@/lib/types";
 type Tab = "script" | "voice" | "subtitles" | "export";
 
 export default function StudioPage() {
-  const [mounted, setMounted] = useState(false);
-
   // Video generation state
   const [isProcessing, setIsProcessing] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -73,10 +70,6 @@ export default function StudioPage() {
       status: "completed",
     },
   ]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Polling for task status
   useEffect(() => {
@@ -158,8 +151,6 @@ export default function StudioPage() {
     { id: "subtitles", label: "Subtitles", icon: Type },
     { id: "export", label: "Export", icon: Settings },
   ];
-
-  if (!mounted) return null;
 
   return (
     <div className="flex h-screen bg-gray-50">

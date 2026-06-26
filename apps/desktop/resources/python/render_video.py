@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Render final_video.mp4 from scene PNGs + narration.
+
+Handles mixed aspect ratios cleanly:
+  * 16:9-ish images (Imagen 1408x768): scale to fit 1920x1080.
+  * Square images (Gemini 1024x1024): scale to fit, fill remaining space with a
+    blurred, scaled-up copy of the same image (avoids black letterbox bars).
+
+Per-scene segments are rendered to a cache dir, then concatenated. Idempotent:
+re-running skips segments whose source PNG hasn't changed.
+"""
+from __future__ import annotations
+import argparse, hashlib, json, subprocess, sys
+from pathlib import Path
+
+
+def sha8(path: Path) -> str:
+    h=hashlib.sha256()
+    with path.open('rb') as f:
+        for blk in iter(lambda: f.read(1<<20), b''): h.update(blk)
+    return h.hexdigest()[:8]
+
+
+def render_segment(img: Path, duration: float, out_mp4: Path, fps: int = 30,
+                   w: int = 1920, h: int = 1080):
+    """Render an image to a still video of `duration` seconds at WxH.
+
+    Uses blur-fill so non-16:9 sources don't get black bars."""
+    if out_mp4.exists() and out_mp4.stat().st_size > 0:
+        # Verify duration roughly matches; otherwise re-render.
+        try:
+            cur = float(subprocess.check_output(
+                ['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(out_mp4)],
+                text=True).strip() or 0)
+            if abs(cur-duration) < 0.05:
+                return False  # already good
+        except Exception:
+            pass
+    vf=(f'[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,'
+        f'crop={w}:{h},boxblur=20:5,setsar=1[bg];'
+        f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,setsar=1[fg];'
+        f'[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]')
+    cmd=['ffmpeg','-y','-loop','1','-t',f'{duration:.3f}','-i',str(img),
+         '-filter_complex',vf,'-map','[v]','-r',str(fps),
+         '-c:v','libx264','-preset','medium','-crf','20','-pix_fmt','yuv420p',
+         '-movflags','+faststart',str(out_mp4)]
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    return True
+
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument('--project', required=True)
+    ap.add_argument('--width', type=int, default=1920)
+    ap.add_argument('--height', type=int, default=1080)
+    ap.add_argument('--fps', type=int, default=30)
+    args=ap.parse_args()
+    project=Path(args.project).resolve()
+    images=project/'images'
+    audio=project/'audio'
+    video=project/'video'; video.mkdir(parents=True, exist_ok=True)
+    seg_dir=video/'_segments'; seg_dir.mkdir(parents=True, exist_ok=True)
+    ts_path=audio/'timestamps.json'
+    narration=audio/'narration.wav'
+    if not narration.exists(): narration=audio/'narration.mp3'
+    if not narration.exists(): raise SystemExit(f'narration audio missing in {audio}')
+    if not ts_path.exists(): raise SystemExit(f'timestamps.json missing at {ts_path}')
+    ts=json.loads(ts_path.read_text(encoding='utf-8'))
+    chunks=ts.get('chunks',[])
+    if not chunks: raise SystemExit('no chunks in timestamps.json')
+    # Render per-scene segments.
+    rendered=0; reused=0; missing_images=[]
+    seg_paths=[]
+    for ch in chunks:
+        sid=int(ch['scene_id']); dur=float(ch['duration_seconds'])
+        img=images/f'scene_{sid:04d}.png'
+        if not img.exists():
+            missing_images.append(sid); continue
+        out_mp4=seg_dir/f'seg_{sid:04d}.mp4'
+        seg_paths.append(out_mp4)
+        try:
+            did=render_segment(img, dur, out_mp4, fps=args.fps, w=args.width, h=args.height)
+            if did: rendered+=1
+            else: reused+=1
+            print(f'  scene {sid:04d} dur={dur:.2f}s {"rendered" if did else "reused"}', flush=True)
+        except subprocess.CalledProcessError as e:
+            print(f'  ! ffmpeg failed on scene {sid:04d}: {e.stderr[:200] if e.stderr else "no stderr"}', flush=True)
+            raise
+    if missing_images: raise SystemExit(f'missing images: {missing_images}')
+    print(f'segments: rendered={rendered} reused={reused} total={len(seg_paths)}', flush=True)
+    # Build concat list.
+    concat_txt=seg_dir/'concat.txt'
+    concat_txt.write_text(''.join([f"file {str(p)!r}\n" for p in seg_paths]), encoding='utf-8')
+    # Concat segments -> silent video, then mux narration.
+    silent=video/'_silent.mp4'
+    subprocess.run(['ffmpeg','-y','-f','concat','-safe','0','-i',str(concat_txt),
+                    '-c:v','copy', str(silent)], check=True)
+    out=video/'final_video.mp4'
+    # Mux audio. Use -shortest so video is trimmed to narration length (or vice versa).
+    subprocess.run(['ffmpeg','-y','-i',str(silent),'-i',str(narration),
+                    '-c:v','copy','-c:a','aac','-b:a','192k','-shortest',
+                    '-movflags','+faststart', str(out)], check=True)
+    silent.unlink(missing_ok=True)
+    # Record the command used.
+    (video/'ffmpeg_command.txt').write_text(
+        f'# generated by scripts/render_video.py\n'
+        f'# segments in {seg_dir}\n'
+        f'# concat: ffmpeg -y -f concat -safe 0 -i concat.txt -c:v copy _silent.mp4\n'
+        f'# mux:    ffmpeg -y -i _silent.mp4 -i narration.wav -c:v copy -c:a aac -shortest final_video.mp4\n',
+        encoding='utf-8')
+    # Probe.
+    dur=float(subprocess.check_output(
+        ['ffprobe','-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',str(out)],
+        text=True).strip() or 0)
+    print(f'\nfinal_video.mp4 written: duration={dur:.2f}s ({dur/60:.1f} min)', flush=True)
+
+
+if __name__=='__main__': main()

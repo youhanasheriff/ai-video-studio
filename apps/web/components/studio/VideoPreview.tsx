@@ -8,9 +8,7 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
-  Maximize2,
   Download,
-  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

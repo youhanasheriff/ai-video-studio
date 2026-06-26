@@ -2,7 +2,7 @@
 import json
 import os
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 from redis import Redis
 from redis.connection import ConnectionPool
 import uuid
@@ -10,6 +10,7 @@ import uuid
 
 class RedisDB:
     """Redis-based database and cache manager."""
+    backend = "redis"
     
     # Key prefixes
     PROJECT_PREFIX = "project:"
@@ -21,12 +22,6 @@ class RedisDB:
         """Initialize Redis connection."""
         redis_url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0")
         
-        # Parse Redis URL to get database number
-        if "/" in redis_url:
-            db_num = int(redis_url.split("/")[-1])
-        else:
-            db_num = 0
-            
         # Create connection pool
         pool = ConnectionPool.from_url(redis_url, decode_responses=True, max_connections=50)
         self.redis: Redis = Redis(connection_pool=pool)
@@ -289,14 +284,172 @@ class RedisDB:
         }
 
 
-# Global Redis instance
-_redis_db: Optional[RedisDB] = None
+class InMemoryDB:
+    """Process-local database for Redis-free development."""
+    backend = "memory"
+
+    def __init__(self):
+        self.projects: Dict[str, Dict[str, Any]] = {}
+        self.generations: Dict[str, Dict[str, Any]] = {}
+        self.project_generations: Dict[str, set[str]] = {}
+        self.cache: Dict[str, Any] = {}
+
+    def ping(self) -> bool:
+        return True
+
+    def create_project(self, project_data: Dict[str, Any]) -> str:
+        project_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+        project = {
+            **project_data,
+            "id": project_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        project.setdefault("status", "draft")
+        self.projects[project_id] = project
+        return project_id
+
+    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+        project = self.projects.get(project_id)
+        return dict(project) if project else None
+
+    def update_project(self, project_id: str, updates: Dict[str, Any]) -> bool:
+        project = self.projects.get(project_id)
+        if not project:
+            return False
+
+        project.update(updates)
+        project["updated_at"] = datetime.utcnow().isoformat()
+        return True
+
+    def delete_project(self, project_id: str) -> bool:
+        if project_id not in self.projects:
+            return False
+
+        del self.projects[project_id]
+        for task_id in self.project_generations.pop(project_id, set()):
+            self.generations.pop(task_id, None)
+        return True
+
+    def list_projects(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        projects = sorted(
+            self.projects.values(),
+            key=lambda project: project.get("created_at", ""),
+            reverse=True,
+        )
+        return [dict(project) for project in projects[skip:skip + limit]]
+
+    def count_projects(self) -> int:
+        return len(self.projects)
+
+    def create_generation(self, generation_data: Dict[str, Any]) -> str:
+        task_id = generation_data.get("task_id") or str(uuid.uuid4())
+        generation = {
+            **generation_data,
+            "task_id": task_id,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        generation.setdefault("status", "PENDING")
+        generation.setdefault("progress", 0)
+        self.generations[task_id] = generation
+
+        if project_id := generation.get("project_id"):
+            self.project_generations.setdefault(project_id, set()).add(task_id)
+
+        return task_id
+
+    def get_generation(self, task_id: str) -> Optional[Dict[str, Any]]:
+        generation = self.generations.get(task_id)
+        return dict(generation) if generation else None
+
+    def update_generation(self, task_id: str, updates: Dict[str, Any]) -> bool:
+        generation = self.generations.get(task_id)
+        if not generation:
+            return False
+
+        generation.update(updates)
+        if generation.get("status") in ["SUCCESS", "FAILURE"]:
+            generation["completed_at"] = datetime.utcnow().isoformat()
+
+        if project_id := generation.get("project_id"):
+            if generation.get("status") == "SUCCESS":
+                self.update_project(project_id, {
+                    "status": "completed",
+                    "output_url": generation.get("output_url"),
+                    "task_id": task_id,
+                })
+            elif generation.get("status") == "FAILURE":
+                self.update_project(project_id, {"status": "failed"})
+
+        return True
+
+    def get_project_generations(self, project_id: str) -> List[Dict[str, Any]]:
+        generations = [
+            self.generations[task_id]
+            for task_id in self.project_generations.get(project_id, set())
+            if task_id in self.generations
+        ]
+        generations.sort(key=lambda generation: generation.get("created_at", ""), reverse=True)
+        return [dict(generation) for generation in generations]
+
+    def cache_set(self, key: str, value: Any, ttl: int = 300):
+        self.cache[key] = value
+
+    def cache_get(self, key: str) -> Optional[Any]:
+        return self.cache.get(key)
+
+    def cache_delete(self, key: str):
+        self.cache.pop(key, None)
+
+    def cache_clear_pattern(self, pattern: str):
+        for key in list(self.cache):
+            if pattern in key:
+                self.cache.pop(key, None)
+
+    def flush_all(self):
+        self.projects.clear()
+        self.generations.clear()
+        self.project_generations.clear()
+        self.cache.clear()
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            "projects_count": self.count_projects(),
+            "redis_info": {"used_memory_human": "N/A"},
+            "cache_info": {"used_memory_human": "N/A"},
+        }
 
 
-def get_redis_db() -> RedisDB:
-    """Get or create Redis database instance."""
+DataStore = RedisDB | InMemoryDB
+
+
+# Global database instance
+_redis_db: Optional[DataStore] = None
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def get_redis_db() -> DataStore:
+    """Get or create the configured database instance."""
     global _redis_db
     if _redis_db is None:
+        if _env_flag("USE_IN_MEMORY_DB") or _env_flag("DEV_MOCK_GENERATION"):
+            _redis_db = InMemoryDB()
+            return _redis_db
+
         redis_url = os.getenv("REDIS_URL", os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0"))
-        _redis_db = RedisDB(redis_url)
+        redis_db = RedisDB(redis_url)
+
+        if redis_db.ping() or _env_flag("REQUIRE_REDIS"):
+            _redis_db = redis_db
+        else:
+            print("Redis is unavailable; using in-memory development storage.")
+            _redis_db = InMemoryDB()
+
     return _redis_db

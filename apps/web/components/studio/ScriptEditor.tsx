@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Type, Sparkles, Tag, X, Plus, FileText, Wand2 } from "lucide-react";
+import React, { useState } from "react";
+import { Sparkles, Tag, X, Plus, FileText, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,14 +21,8 @@ export function ScriptEditor({
   onKeywordsChange,
 }: ScriptEditorProps) {
   const [keywordInput, setKeywordInput] = useState("");
-  const [wordCount, setWordCount] = useState(0);
-  const [charCount, setCharCount] = useState(0);
-
-  useEffect(() => {
-    const words = script.trim().split(/\s+/).filter(Boolean);
-    setWordCount(words.length);
-    setCharCount(script.length);
-  }, [script]);
+  const wordCount = script.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = script.length;
 
   const addKeyword = () => {
     const trimmed = keywordInput.trim().toLowerCase();
