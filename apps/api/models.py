@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, Any, List
+from typing import Optional, List
 
 
 class GenerateRequest(BaseModel):

@@ -1,5 +1,12 @@
 # AI Video Generation Studio
 
+[![CI](https://github.com/youhanasheriff/ai-video-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/youhanasheriff/ai-video-studio/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Next.js](https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![Turborepo](https://img.shields.io/badge/Turborepo-monorepo-EF4444?logo=turborepo&logoColor=white)
+
 A full-stack monorepo application aimed at automating vertical video creation using AI tools. This project features a modern Next.js 14 frontend and a robust FastAPI backend orchestrating complex video processing tasks via Celery and Redis.
 
 ## 🏗 Architecture
