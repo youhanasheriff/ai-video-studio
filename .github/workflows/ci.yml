@@ -27,6 +27,8 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10
+          # Root package.json pins pnpm@8, which cannot read apps/web's v9 lockfile.
+          package_json_file: apps/web/package.json
 
       - uses: actions/setup-node@v4
         with:
